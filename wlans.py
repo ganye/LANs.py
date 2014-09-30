@@ -60,3 +60,6 @@ def main():
     # Check if the user is running as root -- if not, exit
     if not os.geteuid() == 0:
         sys.exit('Please run as root.')
+
+if __name__ == '__main__':
+    main()
