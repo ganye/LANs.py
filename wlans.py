@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python2
 
 __author__ = 'ganye'
 __license__ = 'BSD'
@@ -14,7 +14,7 @@ import signal
 import logging
 import argparse
 import threading
-from cStringIO import StringIO
+from StringIO import StringIO
 # Quiet scapy's unnecessary logging
 logging.getLogger('scapy.runtime').setLevel(logging.ERROR)
 
@@ -55,3 +55,8 @@ class WLANs(object):
         - iptables
         - python-iptables
     '''
+
+def main():
+    # Check if the user is running as root -- if not, exit
+    if not os.geteuid() == 0:
+        sys.exit('Please run as root.')
