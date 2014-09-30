@@ -24,6 +24,8 @@ from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.interfaces import IReadDescriptor
 from netfilterqueue import NetfilterQueue
 
+from color import Color
+
 def parse_args():
     '''
     Setup CLI arguments.
@@ -53,4 +55,3 @@ class WLANs(object):
         - iptables
         - python-iptables
     '''
-    pass
