@@ -57,29 +57,73 @@ def parse_args():
     parser.add_argument('-i', '--interface', help='Choose the interface to'
             ' use.', dest='interface', required=True)
 
-def get_default_gateway(iface):
-    '''
-    Returns the default gateway for a given interface. If no default gateway
-    can be found, it will instead raise a WLANsError
-    '''
-    gws = netifaces.gateways()['default']
-    gws = gws[netifaces.AF_INET] # Get IPv4 GW
-
-    for gw in gws:
-        if iface in gw:
-            return gw[0]
-    raise WLANsError("could not find a gateway for '{iface}'".format(
-        iface=iface))
-
 class WLANsError(Exception):
     '''
     Error class used by the application. Simply wraps the Exception class.
     '''
     pass
 
+class Network(object):
+    '''
+    Simple network object used to store information about an interface's
+    network. Contructor accepts the name of an interface, and then gathers
+    the necessary information.
+    '''
+    def __init__(self, interface):
+        self._iface = interace
+
+    def addr(self):
+        '''
+        Returns the first IP address for the Network interface. If no address
+        can be found, raises a WLANsError.
+        '''
+        addrs = netifaces.ifaddresses(self._iface)[netifaces.AF_INET]
+        try:
+            return addrs[0]['addr']
+        except KeyError:
+            raise WLANsError("could not find an ip address for '{iface}'"
+                    .format(iface=self._iface))
+
+    def gateway(self):
+        '''
+        Returns the default gateway for the network interface. If no gateway
+        can be found, raises a WLANsError.
+        '''
+        gateways = netifaces.gateways()['default'][netifaces.AF_INET]
+        for gateway in gateways:
+            if self._iface in gateway:
+                return gateway[0]
+        raise WLANsError("could not find a default gateway for '{iface}'"
+                .format(iface=self._iface))
+
+    def netmask(self):
+        '''
+        Returns the network mask for the network interface. If not network
+        mask can be found, raises a WLANsError.
+        '''
+        addrs = netifaces.ifaddresses(self._iface)[netifaces.AF_INET]
+        try:
+            return addrs[0]['netmask']
+        except KeyError:
+            raise WLANsError("could not find a network mask for '{iface}'"
+                    .format(iface=self._iface))
+
+    def cidr(self):
+        addr = self.addr()
+        netmask = self.netmask()
+
+        binary_str = ''
+        for octet in netmask.split('.'):
+            binary_str += bin(int(octet))[2:].zfill(8)
+
+        mask = str(len(binary_str.rstrip('0')))
+        return '{addr}/{mask}'.format(addr=addr, mask=mask)
+
 class WLANs(object):
     def __init__(self, interface, nmap=False, msbt=False):
         self.interface = interface
+
+    def setup(self):
         self.gateway = get_default_gateway(iface)
 
 def main():

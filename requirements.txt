@@ -1,5 +1,6 @@
 NetfilterQueue==0.3
 Twisted==14.0.2
+ipython==2.2.0
+netifaces==0.10.4
 wsgiref==0.1.2
 zope.interface==4.1.1
-scapy==2.2.0
