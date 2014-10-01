@@ -1,5 +1,21 @@
 #! /usr/bin/env python2
-
+'''
+Description: ARP poisons a LAN victim over wifi and print any interesting
+    information, such as usernames/passwords and messages. Based on
+    DanMcInerney's LANs.py (https://github.com/DanMcInerney/LANs.py).
+Prerequisites:
+    - Linux
+    - nmap (optional -- needed for -S/--scan flag)
+    - nbtscan (optional -- needed for -N/--netbios flag)
+    - aircrack-ng
+    - Python 2.x
+    - nfqueue-bindings
+    - Scapy
+    - Twisted
+    - iptables
+    - python-iptables
+    - netifaces
+'''
 __author__ = 'ganye'
 __license__ = 'BSD'
 __contact__ = 'github.com/ganye'
@@ -42,6 +58,10 @@ def parse_args():
             ' use.', dest='interface', required=True)
 
 def get_default_gateway(iface):
+    '''
+    Returns the default gateway for a given interface. If no default gateway
+    can be found, it will instead raise a WLANsError
+    '''
     gws = netifaces.gateways()['default']
     gws = gws[netifaces.AF_INET] # Get IPv4 GW
 
@@ -51,24 +71,13 @@ def get_default_gateway(iface):
     raise WLANsError("could not find a gateway for '{iface}'".format(
         iface=iface))
 
+class WLANsError(Exception):
+    '''
+    Error class used by the application. Simply wraps the Exception class.
+    '''
+    pass
+
 class WLANs(object):
-    '''
-    Description: ARP poisons a LAN victim over wifi and print any interesting
-        information, such as usernames/passwords and messages. Based on
-        DanMcInerney's LANs.py (https://github.com/DanMcInerney/LANs.py).
-    Prerequisites:
-        - Linux
-        - nmap (optional -- needed for -S/--scan flag)
-        - nbtscan (optional -- needed for -N/--netbios flag)
-        - aircrack-ng
-        - Python 2.x
-        - nfqueue-bindings
-        - Scapy
-        - Twisted
-        - iptables
-        - python-iptables
-        - netifaces
-    '''
     def __init__(self, interface, nmap=False, msbt=False):
         self.interface = interface
         self.gateway = get_default_gateway(iface)
