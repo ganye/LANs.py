@@ -57,6 +57,8 @@ def parse_args():
     parser.add_argument('-i', '--interface', help='Choose the interface to'
             ' use.', dest='interface', required=True)
 
+    return parser.parse_args()
+
 class WLANsError(Exception):
     '''
     Error class used by the application. Simply wraps the Exception class.
