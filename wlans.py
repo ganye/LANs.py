@@ -19,6 +19,7 @@ from StringIO import StringIO
 logging.getLogger('scapy.runtime').setLevel(logging.ERROR)
 
 import scapy
+import netifaces
 from twisted.internet import reactor
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.interfaces import IReadDescriptor
@@ -33,10 +34,22 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-S', '--scan', help='Aggressively scans the target'
-            'for open port and background services. Logs output to'
-            '{victim_ip}.log', action='store_true')
+            ' for open port and background services. Logs output to'
+            ' {victim_ip}.log', action='store_true')
     parser.add_argument('-N', '--nbtscan', help='Enable nbtscan to get'
-            'Windows netbios names', action='store_true')
+            ' Windows netbios names', action='store_true')
+    parser.add_argument('-i', '--interface', help='Choose the interface to'
+            ' use.', dest='interface', required=True)
+
+def get_default_gateway(iface):
+    gws = netifaces.gateways()['default']
+    gws = gws[netifaces.AF_INET] # Get IPv4 GW
+
+    for gw in gws:
+        if iface in gw:
+            return gw[0]
+    raise WLANsError("could not find a gateway for '{iface}'".format(
+        iface=iface))
 
 class WLANs(object):
     '''
@@ -54,12 +67,20 @@ class WLANs(object):
         - Twisted
         - iptables
         - python-iptables
+        - netifaces
     '''
+    def __init__(self, interface, nmap=False, msbt=False):
+        self.interface = interface
+        self.gateway = get_default_gateway(iface)
 
 def main():
     # Check if the user is running as root -- if not, exit
     if not os.geteuid() == 0:
         sys.exit('Please run as root.')
+
+    args = parse_args()
+
+    wlans = WLANs(interface=args.interface)
 
 if __name__ == '__main__':
     main()
