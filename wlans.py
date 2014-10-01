@@ -72,7 +72,7 @@ class Network(object):
     the necessary information.
     '''
     def __init__(self, interface):
-        self._iface = interace
+        self._iface = interface
 
     def addr(self):
         '''
