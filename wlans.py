@@ -115,6 +115,9 @@ class Network(object):
                     .format(iface=self._iface))
 
     def cidr(self):
+        '''
+        Returns the network address in CIDR notation.
+        '''
         addr = self.addr()
         netmask = self.netmask()
 
@@ -150,6 +153,8 @@ class active_users(object):
                             user[2] += 1
                 cls.current_time = time.time()
 
+            # Ensure that at least one second has passed since the user list
+            # was last printed to the screen
             if cls.current_time > self.start_time + 1:
                 # First, sort users list by data packet count
                 cls.users.sort(key=lambda x: float(x[2]), reverse=True)
@@ -158,6 +163,20 @@ class active_users(object):
 
                 print('[*] {0}IP Address {1}and {2}data {1}sent/received'
                         .format(Color.tan, Color.white, Color.red))
+                print('+------------------------------------+')
+                for user in cls.users:
+                    addr = user['ip'].ljust(16)
+                    data = str(user['data']).ljust(5)
+                    out = '{0.tan}{1} {0.red}{2}{0.white}'.format(
+                            Color, addr, data)
+                    
+                    if user.get('netbios'):
+                        out += user['netbios']
+
+                    print(out)
+
+                print("\n[*] Hit Ctrl+C to stop and choose a victim IP")
+                cls.start_time = time.time()
     
 
 class WLANs(object):
