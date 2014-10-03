@@ -165,10 +165,10 @@ class active_users(object):
                         .format(Color.tan, Color.white, Color.red))
                 print('+------------------------------------+')
                 for user in cls.users:
-                    addr = user['ip'].ljust(16)
+                    ip = user['ip'].ljust(16)
                     data = str(user['data']).ljust(5)
                     out = '{0.tan}{1} {0.red}{2}{0.white}'.format(
-                            Color, addr, data)
+                            Color, ip, data)
                     
                     if user.get('netbios'):
                         out += user['netbios']
@@ -177,6 +177,28 @@ class active_users(object):
 
                 print("\n[*] Hit Ctrl+C to stop and choose a victim IP")
                 cls.start_time = time.time()
+
+    @classmethod
+    def users(cls, cidr, gateway):
+        print('[*] Running ARP scan to identify users -- please wait...')
+        users = {}
+        scanner = nmap.Portscanner()
+        found_router = False
+
+        scan_result = scanner.scan(hosts=cidr, arguments='-sn -n')['scan']
+
+        for host in scan_result.keys(): 
+            user['ip'] = scan_results[host]['addresses']['ipv4']
+            user['mac'] = scan_results[host]['addresses']['mac']
+            user['data'] = 0
+            if not found_router and host == gateway:
+                user['netbios'] = 'router'
+                found_router = True
+            else:
+                user['netbios'] = ''
+
+        if not found_router:
+            sys.exit'[-] Router MAC not found -- exiting')
     
 
 class WLANs(object):
