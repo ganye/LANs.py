@@ -49,13 +49,17 @@ def parse_args():
     '''
     parser = argparse.ArgumentParser()
 
+
+    parser.add_argument('-i', '--interface', help='Choose the interface to'
+            ' use.', dest='interface', required=True)
+    
+    parser.add_argument('-N', '--nbtscan', help='Enable nbtscan to get'
+            ' Windows netbios names', action='store_true')
     parser.add_argument('-S', '--scan', help='Aggressively scans the target'
             ' for open port and background services. Logs output to'
             ' {victim_ip}.log', action='store_true')
-    parser.add_argument('-N', '--nbtscan', help='Enable nbtscan to get'
-            ' Windows netbios names', action='store_true')
-    parser.add_argument('-i', '--interface', help='Choose the interface to'
-            ' use.', dest='interface', required=True)
+    parser.add_argument('-V', '--victim', help='Specify the IP address of'
+            ' the victim\'s machine')
 
     return parser.parse_args()
 
@@ -127,7 +131,8 @@ class active_users(object):
     current_time = 0
     mon_mode = False
 
-    def packet_callback(self, packet):
+    @staticmethod
+    def packet_callback(cls, packet):
         if packet.hasLayer(Dot11):
             dot11packet = packet[Dot11]
             # This block is kind of cryptic -- basically, if the packet is a
@@ -140,14 +145,14 @@ class active_users(object):
                         dot11packet.addr2.upper(),
                         dot11packet.addr3.upper()]
                 for address in addresses:
-                    for user in self.users:
+                    for user in cls.users:
                         if address in user[1]:
                             user[2] += 1
-                self.current_time = time.time()
+                cls.current_time = time.time()
 
-            if self.current_time > self.start_time + 1:
+            if cls.current_time > self.start_time + 1:
                 # First, sort users list by data packet count
-                self.users.sort(key=lambda x: float(x[2]), reverse=True)
+                cls.users.sort(key=lambda x: float(x[2]), reverse=True)
                 
                 os.system('clear')
 
