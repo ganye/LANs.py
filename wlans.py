@@ -24,6 +24,7 @@ __version__ = 0.1
 import os
 import sys
 import gzip
+import time
 import zlib
 import base64
 import signal
@@ -34,6 +35,7 @@ from StringIO import StringIO
 # Quiet scapy's unnecessary logging
 logging.getLogger('scapy.runtime').setLevel(logging.ERROR)
 
+import nmap
 import scapy
 import netifaces
 from twisted.internet import reactor
@@ -139,7 +141,7 @@ class active_users(object):
         if packet.hasLayer(Dot11):
             dot11packet = packet[Dot11]
             # This block is kind of cryptic -- basically, if the packet is a
-            # Dot11 (Wireless) packet, check to see if any of the IP addresses
+            # Dot11 (Wireless) packet, check to see if any of the MAC addresses
             # present are in our list of users, and if so, increment their 
             # packet count by one. TODO: Rewrite this in a more straightforward
             # way
@@ -147,10 +149,11 @@ class active_users(object):
                 addresses = [dot11packet.addr1.upper(),
                         dot11packet.addr2.upper(),
                         dot11packet.addr3.upper()]
+                print('[*] DEBUG -- {0}'.format(addresses))
                 for address in addresses:
                     for user in cls.users:
-                        if address in user[1]:
-                            user[2] += 1
+                        if address == user['ip']:
+                            user['data'] += 1
                 cls.current_time = time.time()
 
             # Ensure that at least one second has passed since the user list
@@ -181,24 +184,27 @@ class active_users(object):
     @classmethod
     def users(cls, cidr, gateway):
         print('[*] Running ARP scan to identify users -- please wait...')
-        users = {}
-        scanner = nmap.Portscanner()
+        user = {}
+        scanner = nmap.PortScanner()
         found_router = False
 
         scan_result = scanner.scan(hosts=cidr, arguments='-sn -n')['scan']
 
         for host in scan_result.keys(): 
-            user['ip'] = scan_results[host]['addresses']['ipv4']
-            user['mac'] = scan_results[host]['addresses']['mac']
+            user = {}
+            user['ip'] = scan_result[host]['addresses']['ipv4']
+            user['mac'] = scan_result[host]['addresses']['mac']
             user['data'] = 0
             if not found_router and host == gateway:
                 user['netbios'] = 'router'
                 found_router = True
             else:
                 user['netbios'] = ''
+            
+            cls.users.append(user)
 
         if not found_router:
-            sys.exit'[-] Router MAC not found -- exiting')
+            sys.exit('[-] Router MAC not found -- exiting')
     
 
 class WLANs(object):
@@ -206,10 +212,11 @@ class WLANs(object):
         self.network = Network(interface)
 
         # We want to convert options from an argparse.Namespace object to a
-        # dict for ease of use -- var() does just that for us
-        self.options = var(options)
+        # dict for ease of use -- __dict__ does just that for us
+        self.options = options.__dict__
 
-        self.victim = self.options.get('victim') or active_users.
+        self.victim = self.options.get('victim') or active_users.users(
+                self.network.cidr(), self.network.gateway())
 
 
 
@@ -221,7 +228,10 @@ def main():
 
     args = parse_args()
 
-    wlans = WLANs(interface=args.interface)
+    interface = args.interface
+    del args.interface
+
+    wlans = WLANs(interface, args)
 
 if __name__ == '__main__':
     main()
