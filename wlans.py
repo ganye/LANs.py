@@ -26,11 +26,13 @@ import sys
 import gzip
 import time
 import zlib
+import shlex
 import base64
 import signal
 import logging
 import argparse
 import threading
+import subprocess
 from StringIO import StringIO
 # Quiet scapy's unnecessary logging
 logging.getLogger('scapy.runtime').setLevel(logging.ERROR)
@@ -149,10 +151,9 @@ class active_users(object):
                 addresses = [dot11packet.addr1.upper(),
                         dot11packet.addr2.upper(),
                         dot11packet.addr3.upper()]
-                print('[*] DEBUG -- {0}'.format(addresses))
                 for address in addresses:
                     for user in cls.users:
-                        if address == user['ip']:
+                        if address == user['mac']:
                             user['data'] += 1
                 cls.current_time = time.time()
 
@@ -160,7 +161,7 @@ class active_users(object):
             # was last printed to the screen
             if cls.current_time > self.start_time + 1:
                 # First, sort users list by data packet count
-                cls.users.sort(key=lambda x: float(x[2]), reverse=True)
+                cls.users.sort(key=lambda x: float(x['data']), reverse=True)
                 
                 os.system('clear')
 
@@ -182,7 +183,7 @@ class active_users(object):
                 cls.start_time = time.time()
 
     @classmethod
-    def users(cls, cidr, gateway):
+    def users(cls, cidr, gateway, nbtscan):
         print('[*] Running ARP scan to identify users -- please wait...')
         user = {}
         scanner = nmap.PortScanner()
@@ -206,6 +207,26 @@ class active_users(object):
         if not found_router:
             sys.exit('[-] Router MAC not found -- exiting')
     
+        if nbtscan:
+            try:
+                cmd = 'nbtscan {cidr'.format(cidr=cidr)
+                nbt = subprocess.Popen(shlex.split(cmd),
+                        stdout=subprocess.PIPE, stderr=open('dev/null'))
+                output = nbt.communicate()[0]
+                lines = output.splitlines()
+                lines = lines[4:] # Lines 4..n contain the NetBIOS name
+            except OSError:
+                raise WLANsError("could not run nbtscan -- is it installed?")
+
+            for line in lines:
+                line = line.split()
+                ip = like[0]
+                nbtname = line[1]
+
+                for user in cls.users:
+                    if ip == user['ip']:
+                        user['netbios'] = nbtname
+                    
 
 class WLANs(object):
     def __init__(self, interface, options):
