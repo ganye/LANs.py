@@ -80,50 +80,53 @@ class Network(object):
     the necessary information.
     '''
     def __init__(self, interface):
-        self._iface = interface
+        self.interface = interface
+        self.addr = self._addr()
+        self.gateway = self._gateway()
+        self.netmask = self._netmask()
+        self.cidr = self._cidr()
 
-    def addr(self):
+    def _addr(self):
         '''
         Returns the first IP address for the Network interface. If no address
         can be found, raises a WLANsError.
         '''
-        addrs = netifaces.ifaddresses(self._iface)[netifaces.AF_INET]
+        addrs = netifaces.ifaddresses(self.interface)[netifaces.AF_INET]
         try:
             return addrs[0]['addr']
         except KeyError:
             raise WLANsError("could not find an ip address for '{iface}'"
-                    .format(iface=self._iface))
+                    .format(iface=self.interface))
 
-    def gateway(self):
+    def _gateway(self):
         '''
         Returns the default gateway for the network interface. If no gateway
         can be found, raises a WLANsError.
         '''
-        gateways = netifaces.gateways()['default'][netifaces.AF_INET]
-        for gateway in gateways:
-            if self._iface in gateway:
-                return gateway[0]
+        gateway = netifaces.gateways()['default'][netifaces.AF_INET]
+        if self.interface in gateway:
+            return gateway[0]
         raise WLANsError("could not find a default gateway for '{iface}'"
-                .format(iface=self._iface))
+                .format(iface=self.interface))
 
-    def netmask(self):
+    def _netmask(self):
         '''
         Returns the network mask for the network interface. If not network
         mask can be found, raises a WLANsError.
         '''
-        addrs = netifaces.ifaddresses(self._iface)[netifaces.AF_INET]
+        addrs = netifaces.ifaddresses(self.interface)[netifaces.AF_INET]
         try:
             return addrs[0]['netmask']
         except KeyError:
             raise WLANsError("could not find a network mask for '{iface}'"
-                    .format(iface=self._iface))
+                    .format(iface=self.interface))
 
-    def cidr(self):
+    def _cidr(self):
         '''
         Returns the network address in CIDR notation.
         '''
-        addr = self.addr()
-        netmask = self.netmask()
+        addr = self.addr
+        netmask = self.netmask
 
         binary_str = ''
         for octet in netmask.split('.'):
@@ -136,12 +139,14 @@ class active_users(object):
     users = []
     start_time = time.time()
     current_time = 0
-    mon_mode = False
+    
+    def __init__(self, network, options):
+        self.network = network
+        self.options = options
 
-    @staticmethod
-    def packet_callback(cls, packet):
-        if packet.hasLayer(Dot11):
-            dot11packet = packet[Dot11]
+    def packet_callback(self, packet):
+        if packet.hasLayer(scapy.Dot11):
+            dot11packet = packet[scapy.Dot11]
             # This block is kind of cryptic -- basically, if the packet is a
             # Dot11 (Wireless) packet, check to see if any of the MAC addresses
             # present are in our list of users, and if so, increment their 
@@ -152,23 +157,23 @@ class active_users(object):
                         dot11packet.addr2.upper(),
                         dot11packet.addr3.upper()]
                 for address in addresses:
-                    for user in cls.users:
+                    for user in self.users:
                         if address == user['mac']:
                             user['data'] += 1
-                cls.current_time = time.time()
+                self.current_time = time.time()
 
             # Ensure that at least one second has passed since the user list
             # was last printed to the screen
-            if cls.current_time > self.start_time + 1:
+            if self.current_time > self.start_time + 1:
                 # First, sort users list by data packet count
-                cls.users.sort(key=lambda x: float(x['data']), reverse=True)
+                self.users.sort(key=lambda x: float(x['data']), reverse=True)
                 
                 os.system('clear')
 
                 print('[*] {0}IP Address {1}and {2}data {1}sent/received'
                         .format(Color.tan, Color.white, Color.red))
                 print('+------------------------------------+')
-                for user in cls.users:
+                for user in self.users:
                     ip = user['ip'].ljust(16)
                     data = str(user['data']).ljust(5)
                     out = '{0.tan}{1} {0.red}{2}{0.white}'.format(
@@ -180,53 +185,84 @@ class active_users(object):
                     print(out)
 
                 print("\n[*] Hit Ctrl+C to stop and choose a victim IP")
-                cls.start_time = time.time()
+                self.start_time = time.time()
 
-    @classmethod
-    def users(cls, cidr, gateway, nbtscan):
+    def find_users(self):
+        self.arp_scan()
+    
+        if self.options.get('nbtscan'):
+            self.nbt_scan()     
+
+        monitor_iface = self.enable_monitor()
+
+        scapy.sniff(iface=monitor_iface, prn=self.packet_callback, store=0)
+
+    def arp_scan(self):
         print('[*] Running ARP scan to identify users -- please wait...')
         user = {}
         scanner = nmap.PortScanner()
         found_router = False
 
-        scan_result = scanner.scan(hosts=cidr, arguments='-sn -n')['scan']
+        scan_result = scanner.scan(hosts=self.network.cidr, 
+                arguments='-sn -n')['scan']
 
-        for host in scan_result.keys(): 
+        # Only check hosts that responded to our arp
+        filtered_hosts = filter(lambda x: scan_result[x]['status']['reason']
+                == 'arp-response', scan_result.keys())
+
+        for host in filtered_hosts: 
             user = {}
             user['ip'] = scan_result[host]['addresses']['ipv4']
-            user['mac'] = scan_result[host]['addresses']['mac']
+            # python-nmap does not return a mac address for the current host
+            # when running an arp scan
+            user['mac'] = scan_result[host]['addresses'].get('mac', '')
             user['data'] = 0
-            if not found_router and host == gateway:
+            if not found_router and host == self.network.gateway:
                 user['netbios'] = 'router'
                 found_router = True
             else:
                 user['netbios'] = ''
             
-            cls.users.append(user)
+            self.users.append(user)
 
         if not found_router:
+            print(self.network.gateway)
             sys.exit('[-] Router MAC not found -- exiting')
-    
-        if nbtscan:
-            try:
-                cmd = 'nbtscan {cidr'.format(cidr=cidr)
-                nbt = subprocess.Popen(shlex.split(cmd),
-                        stdout=subprocess.PIPE, stderr=open('dev/null'))
-                output = nbt.communicate()[0]
-                lines = output.splitlines()
-                lines = lines[4:] # Lines 4..n contain the NetBIOS name
-            except OSError:
-                raise WLANsError("could not run nbtscan -- is it installed?")
 
-            for line in lines:
-                line = line.split()
-                ip = like[0]
-                nbtname = line[1]
+    def nbt_scan(self):
+        try:
+            cmd = 'nbtscan {cidr}'.format(cidr=self.network.cidr)
+            nbt_process = subprocess.Popen(shlex.split(cmd),
+                    stdout=subprocess.PIPE, stderr=open('dev/null'))
+            output = nbt_process.communicate()[0]
+            lines = output.splitlines()
+            lines = lines[4:] # Lines 4..n contain the NetBIOS name
+        except OSError:
+            raise WLANsError("could not run nbtscan -- is it installed?")
 
-                for user in cls.users:
-                    if ip == user['ip']:
-                        user['netbios'] = nbtname
-                    
+        for line in lines:
+            line = line.split()
+            ip = like[0]
+            nbtname = line[1]
+
+            for user in self.users:
+                if ip == user['ip']:
+                    user['netbios'] = nbtname
+
+    def enable_monitor(self):
+        print('[*] Enabling monitor mode via airmon-ng')
+        try:
+            cmd = "airmon-ng start {0.interface}".format(self.network)
+            airmon_process = subprocess.Popen(shlex.split(cmd),
+                    stdout=subprocess.PIPE, stderr=open('/dev/null'))
+            output = airmon_process.communicate()[0]
+            # Use regex to parse the output of airmon-ng for the interface
+            monitor_iface = re.search('monitor mode enabled on (.+)\)', output)
+            
+            return monitor_iface.group(1)
+        except OSError:
+            raise WLANsError("could not enable monitor mode -- is aircrack"
+                    " installed?")
 
 class WLANs(object):
     def __init__(self, interface, options):
@@ -236,8 +272,9 @@ class WLANs(object):
         # dict for ease of use -- __dict__ does just that for us
         self.options = options.__dict__
 
-        self.victim = self.options.get('victim') or active_users.users(
-                self.network.cidr(), self.network.gateway())
+        self.victim = self.options.get('victim')
+        if not self.victim:
+            self.victim = active_users(self.network, self.options).find_users()
 
 
 
