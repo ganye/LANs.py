@@ -195,7 +195,12 @@ class active_users(object):
 
         monitor_iface = self.enable_monitor()
 
-        scapy.sniff(iface=monitor_iface, prn=self.packet_callback, store=0)
+        try:
+            scapy.sniff(iface=monitor_iface, prn=self.packet_callback, store=0)
+        except KeyboardInterrupt:
+            self.disable_monitor(monitor_iface)
+
+        return raw_input('[*] Enter a non-router IP to target: ')
 
     def arp_scan(self):
         print('[*] Running ARP scan to identify users -- please wait...')
@@ -263,6 +268,11 @@ class active_users(object):
         except OSError:
             raise WLANsError("could not enable monitor mode -- is aircrack"
                     " installed?")
+
+    def disable_monitor(self, iface):
+        print('[*] Disabling monitor mode')
+        os.syste('airmon-ng stop {iface} > /dev/ull 2>&1'.format(iface=iface))
+
 
 class WLANs(object):
     def __init__(self, interface, options):
