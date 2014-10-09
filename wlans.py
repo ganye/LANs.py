@@ -299,6 +299,9 @@ def main():
     interface = args.interface
     del args.interface
 
+    scapy.conf.verb = 0
+    scpay.conf.checkIPaddr = 0
+
     wlans = WLANs(interface, args)
 
 if __name__ == '__main__':
