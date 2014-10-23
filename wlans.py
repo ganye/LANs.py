@@ -40,10 +40,10 @@ logging.getLogger('scapy.runtime').setLevel(logging.ERROR)
 import nmap
 import scapy
 import netifaces
-from twisted.internet import reactor
-from twisted.internet.protocol import Protocol, Factory
-from twisted.internet.interfaces import IReadDescriptor
 from netfilterqueue import NetfilterQueue
+from twisted.internet import reactor
+from twisted.internet.interfaces import IReadDescriptor
+from twisted.internet.protocol import Protocol, Factory
 
 from color import Color
 
@@ -134,6 +134,32 @@ class Network(object):
 
         mask = str(len(binary_str.rstrip('0')))
         return '{addr}/{mask}'.format(addr=addr, mask=mask)
+
+class Queued(object):
+    '''
+    Wrap the nfqueue object in an IReadDescriptor-like object which runs the
+    process_pending function in a doRead(). This object is used for forwarding
+    traffic to nfqueue.
+    '''
+    def __init__(self, args):
+        self.queue = nfqueue.queue()
+        self.queue.set_callback(Parser(args).start)
+        self.queue.fast_open(0, socket.AF_INET)
+        self.queue.set_queue_maxlen(5000)
+        reactor.addReader(self)
+        self.queue.set_mode(nfqueue.NFQNL_COPY_PACKET)
+
+    def fileno(self):
+        return self.queue.get_fd()
+
+    def doRead(self):
+        self.queue.process_pending(500)
+
+    def connectionLost(self, reason):
+        reactor.removeReader(self)
+
+    def logPrefix(self):
+        return 'queued'
 
 class active_users(object):
     users = []
